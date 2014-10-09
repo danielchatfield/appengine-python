@@ -58,6 +58,7 @@ from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore_admin
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types
+from google.appengine.api import yaml_errors
 from google.appengine.api.taskqueue import taskqueue_service_pb
 from google.appengine.datastore import datastore_index
 from google.appengine.datastore import datastore_pb
@@ -2889,6 +2890,7 @@ class DatastoreStub(object):
     self._app_id = datastore_types.ResolveAppId(app_id)
     self._trusted = trusted
     self._root_path = root_path
+    self._xml_configuration = self._XmlConfiguration()
 
 
     self.__query_history = {}
@@ -2902,13 +2904,52 @@ class DatastoreStub(object):
 
     if self._require_indexes or root_path is None:
 
-      self._index_yaml_updater = None
+      self._index_config_updater = None
     else:
 
-      self._index_yaml_updater = datastore_stub_index.IndexYamlUpdater(
-          root_path)
+
+      updater_class = (
+          datastore_stub_index.DatastoreIndexesAutoXmlUpdater
+          if self._xml_configuration else datastore_stub_index.IndexYamlUpdater)
+      self._index_config_updater = updater_class(root_path)
 
     DatastoreStub.Clear(self)
+
+  def _XmlConfiguration(self):
+    """Return True if the app at self._root_path uses XML configuration files.
+
+    An app uses XML configuration files if it has a WEB-INF subdirectory and it
+    does not have an index.yaml at its root. We assume this even if it doesn't
+    currently have any configuration files at all, because then we will want to
+    create a new datastore-indexes-auto.xml rather than create a new index.yaml.
+
+    Returns:
+      True if the app uses XML configuration files, False otherwise.
+
+    Raises:
+      yaml_errors.AmbiguousConfigurationFiles: if there is both an index.yaml
+        and either or both of the two possible XML configuration files.
+    """
+    if not self._root_path:
+      return False
+    index_yaml = os.path.join(self._root_path, 'index.yaml')
+    web_inf = os.path.join(self._root_path, 'WEB-INF')
+    datastore_indexes_xml = os.path.join(web_inf, 'datastore-indexes.xml')
+    datastore_indexes_auto_xml = os.path.join(
+        web_inf, 'appengine-generated', 'datastore-indexes-auto.xml')
+    existing = [
+        f for f in [
+            index_yaml, datastore_indexes_xml, datastore_indexes_auto_xml]
+        if os.path.isfile(f)]
+    if existing == [index_yaml]:
+      return False
+    elif index_yaml in existing:
+      raise yaml_errors.AmbiguousConfigurationFiles(
+          'App has both XML and YAML configuration files: %s' % existing)
+    else:
+      return os.path.isdir(web_inf)
+
+
 
   def Clear(self):
     """Clears out all stored values."""
@@ -3271,8 +3312,8 @@ class DatastoreStub(object):
                     created, deleted, len(requested))
 
   def _UpdateIndexes(self):
-    if self._index_yaml_updater is not None:
-      self._index_yaml_updater.UpdateIndexYaml()
+    if self._index_config_updater is not None:
+      self._index_config_updater.UpdateIndexConfig()
 
 
 class StubQueryConverter(object):
@@ -3730,10 +3771,6 @@ class StubServiceConverter(object):
     if v3_req.has_count():
       v4_req.set_suggested_batch_size(v3_req.count())
 
-    datastore_pbs.check_conversion(
-        not (v3_req.has_transaction() and v3_req.has_failover_ms()),
-        'Cannot set failover and transaction handle.')
-
 
     if v3_req.has_transaction():
       v4_req.mutable_read_options().set_transaction(
@@ -3741,7 +3778,7 @@ class StubServiceConverter(object):
     elif v3_req.strong():
       v4_req.mutable_read_options().set_read_consistency(
           datastore_v4_pb.ReadOptions.STRONG)
-    elif v3_req.has_failover_ms():
+    elif v3_req.has_strong():
       v4_req.mutable_read_options().set_read_consistency(
           datastore_v4_pb.ReadOptions.EVENTUAL)
     if v3_req.has_min_safe_time_seconds():

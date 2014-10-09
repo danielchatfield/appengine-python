@@ -84,6 +84,14 @@ class InvalidBucketConfigurationError(PermanentAppError):
         'nor admin_config.default_bigstore_bucket is set. Deployment aborted.')
 
 
+class InvalidUserInstallItem(PermanentAppError):
+  """Thrown if one of the apt_get_install items is invalid."""
+
+  def __init__(self, bad_package):
+    msg = 'Invalid apt-get-install package in vm_settings:"%s"' % bad_package
+    PermanentAppError.__init__(self, msg)
+
+
 class InvalidScopeConfigurationError(PermanentAppError):
   """Thrown if there are incompatible storage scopes in vm_settings."""
 

@@ -26,12 +26,13 @@ import subprocess
 import sys
 import tempfile
 
+from google.appengine.datastore import datastore_index
+from google.appengine.datastore import datastore_index_xml
 from google.appengine.tools import app_engine_web_xml_parser
 from google.appengine.tools import backends_xml_parser
 from google.appengine.tools import cron_xml_parser
 from google.appengine.tools import dispatch_xml_parser
 from google.appengine.tools import dos_xml_parser
-from google.appengine.tools import indexes_xml_parser
 from google.appengine.tools import jarfile
 from google.appengine.tools import queue_xml_parser
 from google.appengine.tools import web_xml_parser
@@ -281,10 +282,11 @@ class JavaAppUpdate(object):
       if os.path.exists(xml_name):
         with open(xml_name) as xml_file:
           xml_string = xml_file.read()
-        parser = indexes_xml_parser.IndexesXmlParser()
-        indexes += parser.ProcessXml(xml_string)
+        index_definitions = datastore_index_xml.IndexesXmlToIndexDefinitions(
+            xml_string)
+        indexes.extend(index_definitions.indexes)
     if indexes:
-      yaml_string = indexes_xml_parser.MakeIndexesListIntoYaml(indexes)
+      yaml_string = datastore_index.IndexDefinitions(indexes=indexes).ToYAML()
       yaml_file = os.path.join(appengine_generated, 'index.yaml')
       with open(yaml_file, 'w') as yaml:
         yaml.write(yaml_string)

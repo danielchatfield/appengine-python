@@ -58,7 +58,7 @@ class _HealthCheckState(object):
       self.consecutive_healthy_responses = 0
       self.consecutive_unhealthy_responses += 1
 
-  def __repr__(self):
+  def __str__(self):
     """Outputs the state in a readable way for logging."""
     tmpl = '{number} consecutive {state} responses.'
     if self.consecutive_healthy_responses:
@@ -67,7 +67,7 @@ class _HealthCheckState(object):
     else:
       number = self.consecutive_unhealthy_responses
       state = 'UNHEALTHY'
-    return tmpl.format(numer=number, state=state)
+    return tmpl.format(number=number, state=state)
 
 
 class HealthChecker(object):
@@ -114,7 +114,7 @@ class HealthChecker(object):
       logging.debug('Performing health check for instance %s.',
                     self._instance.instance_id)
       self._do_health_check(state)
-      logging.debug('Health check state for instance: %s: %r',
+      logging.debug('Health check state for instance: %s: %s',
                     self._instance.instance_id, state)
       time.sleep(self._config.check_interval_sec)
 

@@ -33,6 +33,9 @@ RESERVED_DOCKER_PORTS = [22,  # SSH
                          10001,  # Nanny stubby proxy endpoint
                         ]
 
+DEFAULT_CONTAINER_PORT = 8080
+VM_PORT_FOR_CONTAINER = 8080
+
 
 class InconsistentPortConfigurationError(vme_errors.PermanentAppError):
   """The port is already in use."""
@@ -44,17 +47,18 @@ class IllegalPortConfigurationError(vme_errors.PermanentAppError):
   pass
 
 
-def CreatePortManager(forwarded_ports):
+def CreatePortManager(forwarded_ports, container_port):
   """Construct a PortManager object with port forwarding configured.
 
   Args:
     forwarded_ports: A dictionary containing desired mappings from VM host port
         to docker container port.
+    container_port: An integer port number for the container port.
 
   Returns:
     The PortManager instance.
   """
-  port_manager_obj = PortManager()
+  port_manager_obj = PortManager(container_port)
   ports_list = forwarded_ports if forwarded_ports else []
   logging.debug('setting forwarded ports %s', ports_list)
   port_manager_obj.Add(ports_list, 'forwarded')
@@ -64,9 +68,10 @@ def CreatePortManager(forwarded_ports):
 class PortManager(object):
   """A helper class for VmManager to deal with port mappings."""
 
-  def __init__(self):
+  def __init__(self, container_port=DEFAULT_CONTAINER_PORT):
     self.used_host_ports = {}
-    self.port_mappings = {}
+    self._port_mappings = {}
+    self.container_port = container_port
 
   def Add(self, ports, kind):
     """Load port configurations and adds them to an internal dict.
@@ -127,7 +132,7 @@ class PortManager(object):
             'Failed to load %s port configuration: "%s" error: "%s"'
             % (kind, port, e))
     # At this point we know they are not destructive.
-    self.port_mappings.update(port_translations)
+    self._port_mappings.update(port_translations)
     return port_translations
 
   def GetAllMappedPorts(self):
@@ -136,4 +141,38 @@ class PortManager(object):
     Returns:
       A dict of port mappings {host: docker}
     """
-    return self.port_mappings
+    if not self._port_mappings:
+      return {}
+    else:
+      return self._port_mappings
+
+  # TODO: look into moving this into a DockerManager.
+  def _BuildDockerPublishArgumentString(self):
+    """Generates a string of ports to expose to the Docker container.
+
+    Returns:
+      A string with --publish=host:docker pairs.
+    """
+    port_map = self.GetAllMappedPorts()
+    # Map container port to port 8080 on the VM (default to 8080 if not set)
+    port_map[VM_PORT_FOR_CONTAINER] = int(self.container_port)
+    result = ''
+    for k, v in port_map.iteritems():
+      result += '--publish=%d:%s ' % (k, v)
+    return result
+
+  def GetReplicaPoolParameters(self):
+    """Returns the contribution to the replica template."""
+    publish_ports = self._BuildDockerPublishArgumentString()
+    maps = {
+        'template': {
+            'vmParams': {
+                'metadata': {
+                    'items': [
+                        {'key': 'gae_publish_ports', 'value': publish_ports}
+                        ]
+                    }
+                }
+            }
+        }
+    return maps

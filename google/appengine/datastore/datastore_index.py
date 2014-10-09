@@ -16,8 +16,6 @@
 #
 
 
-
-
 """Primitives for dealing with datastore indexes.
 
 Example index.yaml file:
@@ -49,6 +47,8 @@ indexes:
 
 - kind: Mountain
   properties:
+  - name: name
+    mode: segment
   - name: location
     mode: geospatial
 """
@@ -87,7 +87,7 @@ class Property(validation.Validated):
   Attributes:
     name: Name of attribute to sort by.
     direction: Direction of sort.
-    mode: How the property is indexed. Either 'geospatial'
+    mode: How the property is indexed. Either 'geospatial', 'segment'
         or None (unspecified).
   """
 
@@ -96,8 +96,8 @@ class Property(validation.Validated):
       'direction': validation.Options(('asc', ('ascending',)),
                                       ('desc', ('descending',)),
                                       default='asc'),
-      'mode': validation.Optional(['geospatial']),
-      }
+      'mode': validation.Optional(['geospatial', 'segment']),
+  }
 
   def __init__(self, **attributes):
 
@@ -112,9 +112,10 @@ class Property(validation.Validated):
     return self.direction != 'desc'
 
   def CheckInitialized(self):
-    if 'direction' in self._is_set and self.mode == 'geospatial':
-      raise validation.ValidationError('Direction on a geospatial-mode '
-                                       'property is not allowed.')
+    if ('direction' in self._is_set and
+        self.mode in ['geospatial', 'segment']):
+      raise validation.ValidationError('Direction on a %s-mode '
+                                       'property is not allowed.' % self.mode)
 
 
 def _PropertyPresenter(dumper, prop):
@@ -162,7 +163,7 @@ class Index(validation.Validated):
       'kind': validation.Type(str, convert=False),
       'ancestor': validation.Type(bool, convert=False, default=False),
       'properties': validation.Optional(validation.Repeated(Property)),
-      }
+  }
 
 
 class IndexDefinitions(validation.Validated):
@@ -175,7 +176,7 @@ class IndexDefinitions(validation.Validated):
   ATTRIBUTES = {
       appinfo.APPLICATION: validation.Optional(appinfo.APPLICATION_RE_STRING),
       'indexes': validation.Optional(validation.Repeated(Index)),
-      }
+  }
 
 
 def ParseIndexDefinitions(document, open_fn=None):
@@ -263,15 +264,12 @@ ASCENDING = datastore_pb.Query_Order.ASCENDING
 DESCENDING = datastore_pb.Query_Order.DESCENDING
 
 
-EQUALITY_OPERATORS = set((datastore_pb.Query_Filter.EQUAL,
-                          ))
-INEQUALITY_OPERATORS = set((datastore_pb.Query_Filter.LESS_THAN,
+EQUALITY_OPERATORS = set([datastore_pb.Query_Filter.EQUAL])
+INEQUALITY_OPERATORS = set([datastore_pb.Query_Filter.LESS_THAN,
                             datastore_pb.Query_Filter.LESS_THAN_OR_EQUAL,
                             datastore_pb.Query_Filter.GREATER_THAN,
-                            datastore_pb.Query_Filter.GREATER_THAN_OR_EQUAL,
-                            ))
-EXISTS_OPERATORS = set((datastore_pb.Query_Filter.EXISTS,
-                        ))
+                            datastore_pb.Query_Filter.GREATER_THAN_OR_EQUAL])
+EXISTS_OPERATORS = set([datastore_pb.Query_Filter.EXISTS])
 
 
 def Normalize(filters, orders, exists):
@@ -384,7 +382,6 @@ def RemoveNativelySupportedComponents(filters, orders, exists):
       return (filters, orders)
 
 
-
   has_key_desc_order = False
   if orders and orders[-1].property() == datastore_types.KEY_SPECIAL_PROPERTY:
     if orders[-1].direction() == ASCENDING:
@@ -403,7 +400,8 @@ def RemoveNativelySupportedComponents(filters, orders, exists):
           f.property(0).name() != datastore_types.KEY_SPECIAL_PROPERTY):
         break
     else:
-      filters = [f for f in filters
+      filters = [
+          f for f in filters
           if f.property(0).name() != datastore_types.KEY_SPECIAL_PROPERTY]
 
   return (filters, orders)
@@ -763,6 +761,10 @@ def MinimalCompositeIndexForQuery(query, index_defs):
   return False, kind, minimal_ancestor, props
 
 
+
+
+
+
 def IndexYamlForQuery(kind, ancestor, props):
   """Return the composite index definition YAML needed for a query.
 
@@ -815,12 +817,12 @@ def IndexXmlForQuery(kind, ancestor, props):
 
 
   serialized_xml = []
-  serialized_xml.append('<datastore-index kind="%s" ancestor="%s">'
+  serialized_xml.append('  <datastore-index kind="%s" ancestor="%s">'
                         % (kind, 'true' if ancestor else 'false'))
   for name, direction in props:
-    serialized_xml.append('  <property name="%s" direction="%s" />'
+    serialized_xml.append('    <property name="%s" direction="%s" />'
                           % (name, 'asc' if direction == ASCENDING else 'desc'))
-  serialized_xml.append('</datastore-index>')
+  serialized_xml.append('  </datastore-index>')
   return '\n'.join(serialized_xml)
 
 
@@ -852,6 +854,8 @@ def IndexDefinitionToProto(app_id, index_definition):
 
       if prop.mode == 'geospatial':
         prop_proto.set_mode(entity_pb.Index_Property.GEOSPATIAL)
+      elif prop.mode == 'segment':
+        prop_proto.set_mode(entity_pb.Index_Property.SEGMENT)
       elif prop.IsAscending():
         prop_proto.set_direction(entity_pb.Index_Property.ASCENDING)
       else:
@@ -891,6 +895,8 @@ def ProtoToIndexDefinition(proto):
 
     if prop_proto.mode() == entity_pb.Index_Property.GEOSPATIAL:
       prop_definition.mode = 'geospatial'
+    elif prop_proto.mode() == entity_pb.Index_Property.SEGMENT:
+      prop_definition.mode = 'segment'
     elif prop_proto.direction() == entity_pb.Index_Property.DESCENDING:
       prop_definition.direction = 'desc'
     elif prop_proto.direction() == entity_pb.Index_Property.ASCENDING:

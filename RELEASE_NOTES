@@ -3,8 +3,25 @@ All rights reserved.
 
 App Engine SDK - Release Notes
 
+Version 1.9.13
+
+- No changes for 1.9.13
+
+
 Version 1.9.12
+
+Python
 ==============================
+- The libxslt library has been updated from v1.1.22 to v1.1.28
+- Fixed an issue with NDB where a user gets an error stating "_AugmentedQuery'
+  object has no attribute '_filter_predicate'" when running a query without a
+  filter predicate.
+
+PHP
+==============================
+- Fixed an issue where users are unable to read newly created files in Google
+  Cloud Storage.
+    https://code.google.com/p/googleappengine/issues/detail?id=10869
 
 Version 1.9.11
 
