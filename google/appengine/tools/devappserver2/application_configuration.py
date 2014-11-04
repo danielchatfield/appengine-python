@@ -19,6 +19,8 @@
 # TODO: Support more than just app.yaml.
 
 
+
+import datetime
 import errno
 import logging
 import os
@@ -46,6 +48,10 @@ INBOUND_SERVICES_CHANGED = 4
 ENV_VARIABLES_CHANGED = 5
 ERROR_HANDLERS_CHANGED = 6
 NOBUILD_FILES_CHANGED = 7
+
+
+
+
 
 
 _HEALTH_CHECK_DEFAULTS = {
@@ -361,6 +367,11 @@ class ModuleConfiguration(object):
         config, files = appinfo_includes.ParseAndReturnIncludePaths(f)
     if self._forced_app_id:
       config.application = self._forced_app_id
+
+    if config.runtime == 'vm' and not config.version:
+      config.version = generate_version_id()
+      logging.info('No version specified. Generated version id: %s',
+                   config.version)
     return config, [configuration_path] + files
 
   def _parse_java_configuration(self, app_engine_web_xml_path):
@@ -859,3 +870,15 @@ def get_app_error_file(module_configuration):
       return os.path.join(module_configuration.application_root,
                           error_handler.file)
   return None
+
+
+def generate_version_id(datetime_getter=datetime.datetime.now):
+  """Generates a version id based off the current time.
+
+  Args:
+    datetime_getter: A function that returns a datetime.datetime instance.
+
+  Returns:
+    A version string based.
+  """
+  return datetime_getter().isoformat().lower().translate(None, ':-')[:15]

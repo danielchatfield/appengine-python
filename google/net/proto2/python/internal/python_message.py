@@ -39,6 +39,7 @@ this file*.
 """
 
 
+
 import sys
 if sys.version_info[0] < 3:
   try:
@@ -80,7 +81,7 @@ def InitMessage(descriptor, cls):
   if (descriptor.has_options and
       descriptor.GetOptions().message_set_wire_format):
     cls._decoders_by_tag[decoder.MESSAGE_SET_ITEM_TAG] = (
-        decoder.MessageSetItemDecoder(cls._extensions_by_number))
+        decoder.MessageSetItemDecoder(cls._extensions_by_number), None)
 
 
   for field in descriptor.fields:
@@ -207,7 +208,9 @@ def _AttachFieldHelpers(cls, field_descriptor):
     cls._decoders_by_tag[tag_bytes] = (
         type_checkers.TYPE_TO_DECODER[field_descriptor.type](
             field_descriptor.number, is_repeated, is_packed,
-            field_descriptor, field_descriptor._default_constructor))
+            field_descriptor, field_descriptor._default_constructor),
+        field_descriptor if field_descriptor.containing_oneof is not None
+        else None)
 
   AddDecoder(type_checkers.FIELD_TYPE_TO_WIRE_TYPE[field_descriptor.type],
              False)
@@ -691,6 +694,7 @@ def _AddClearMethod(message_descriptor, cls):
 
     self._fields = {}
     self._unknown_fields = ()
+    self._oneofs = {}
     self._Modified()
   cls.Clear = Clear
 
@@ -860,7 +864,7 @@ def _AddMergeFromStringMethod(message_descriptor, cls):
     unknown_field_list = self._unknown_fields
     while pos != end:
       (tag_bytes, new_pos) = local_ReadTag(buffer, pos)
-      field_decoder = decoders_by_tag.get(tag_bytes)
+      field_decoder, field_desc = decoders_by_tag.get(tag_bytes, (None, None))
       if field_decoder is None:
         value_start_pos = new_pos
         new_pos = local_SkipField(buffer, new_pos, end, tag_bytes)
@@ -872,6 +876,8 @@ def _AddMergeFromStringMethod(message_descriptor, cls):
         pos = new_pos
       else:
         pos = field_decoder(buffer, new_pos, end, self, field_dict)
+        if field_desc:
+          self._UpdateOneofState(field_desc)
     return pos
   cls._InternalParse = InternalParse
 

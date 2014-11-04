@@ -1293,6 +1293,8 @@ class Query(object):
     total = 0
     while rpc is not None:
       batch = yield rpc
+      options = QueryOptions(offset=options.offset - batch.skipped_results,
+                             config=options)
       rpc = batch.next_batch_async(options)
       total += batch.skipped_results
     raise tasklets.Return(total)

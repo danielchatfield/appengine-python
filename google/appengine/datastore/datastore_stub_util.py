@@ -32,6 +32,7 @@ from __future__ import with_statement
 
 
 
+
 try:
   import hashlib
   _MD5_FUNC = hashlib.md5
@@ -170,6 +171,16 @@ _MAX_SCATTERED_ID = _MAX_SEQUENTIAL_ID + 1 + _MAX_SCATTERED_COUNTER
 
 _SCATTER_SHIFT = 64 - _MAX_SEQUENTIAL_BIT + 1
 
+
+_SHOULD_FAIL_ON_BAD_OFFSET = False
+
+def _HandleBadOffset(expected, actual):
+  logging.warn('Encountered an offset %d to Next but expected %d given the '
+               'query offset and the number of skipped entities.' %
+               (actual, expected))
+  if (_SHOULD_FAIL_ON_BAD_OFFSET):
+    raise datastore_errors.BadArgumentError(
+        'Invalid offset provided. Got %s expected %s.' % (actual, expected))
 
 def _GetScatterProperty(entity_proto):
   """Gets the scatter property for an object.
@@ -1010,6 +1021,17 @@ class BaseCursor(object):
     self.app = query.app()
     self.cursor = self._AcquireCursorID()
 
+    if query.has_count():
+      count = query.count()
+    elif query.has_limit():
+      count = query.limit()
+    else:
+      count = BaseDatastore._BATCH_SIZE
+
+    self.__use_persisted_offset = query.persist_offset()
+    self.__persisted_offset = query.offset()
+    self.__persisted_count = count
+
     self.__order_compare_entities = dsquery._order.cmp_for_filter(
         dsquery._filter_predicate)
     if self.group_by:
@@ -1131,6 +1153,34 @@ class BaseCursor(object):
       position.set_start_inclusive(False)
       _SetBeforeAscending(position, self.__first_sort_order)
 
+  def PopulateQueryResult(self, result, count, offset,
+                          compile=False, first_result=False):
+    """Populates a QueryResult with this cursor and the given number of results.
+
+    Args:
+      result: datastore_pb.QueryResult
+      count: integer of how many results to return, or None if not specified
+      offset: integer of how many results to skip
+      compile: boolean, whether we are compiling this query
+      first_result: whether the query result is the first for this query
+
+    Offset and count may be ignored if the query requested information
+    to be persisted.
+    """
+    if count is None:
+      count = BaseDatastore._BATCH_SIZE
+    if self.__use_persisted_offset:
+      offset = self.__persisted_offset
+      count = self.__persisted_count
+    elif self.__persisted_offset != offset:
+      _HandleBadOffset(self.__persisted_offset, offset)
+    self._PopulateQueryResult(result, count, offset,
+                              compile, first_result)
+    self.__persisted_offset -= result.skipped_results()
+
+  def _PopulateQueryResult(self, result, count, offset,
+                           compile, first_result):
+    raise NotImplementedError
 
 class ListCursor(BaseCursor):
   """A query cursor over a list of entities.
@@ -1214,17 +1264,7 @@ class ListCursor(BaseCursor):
         hi = mid
     return lo
 
-  def PopulateQueryResult(self, result, count, offset,
-                          compile=False, first_result=False):
-    """Populates a QueryResult with this cursor and the given number of results.
-
-    Args:
-      result: datastore_pb.QueryResult
-      count: integer of how many results to return
-      offset: integer of how many results to skip
-      compile: boolean, whether we are compiling this query
-      first_result: whether the query result is the first for this query
-    """
+  def _PopulateQueryResult(self, result, count, offset, compile, first_result):
     Check(offset >= 0, 'Offset must be >= 0')
 
     offset = min(offset, self.__count - self.__offset)
@@ -2949,8 +2989,6 @@ class DatastoreStub(object):
     else:
       return os.path.isdir(web_inf)
 
-
-
   def Clear(self):
     """Clears out all stored values."""
     self._query_cursors = {}
@@ -3044,13 +3082,7 @@ class DatastoreStub(object):
     cursor = self._datastore.GetQueryCursor(query, self._trusted, self._app_id,
                                             filter_predicate)
 
-    if query.has_count():
-      count = query.count()
-    elif query.has_limit():
-      count = query.limit()
-    else:
-      count = self._BATCH_SIZE
-
+    count = query.count() if query.has_count() else None
     cursor.PopulateQueryResult(query_result, count, query.offset(),
                                query.compile(), first_result=True)
     if query_result.has_cursor():
@@ -3136,12 +3168,12 @@ class DatastoreStub(object):
     Check(cursor and cursor.app == app,
           'Cursor %d not found' % next_request.cursor().cursor())
 
-    count = self._BATCH_SIZE
-    if next_request.has_count():
-      count = next_request.count()
-
-    cursor.PopulateQueryResult(query_result, count, next_request.offset(),
-                               next_request.compile(), first_result=False)
+    count = next_request.count() if next_request.has_count() else None
+    cursor.PopulateQueryResult(query_result,
+                               count,
+                               next_request.offset(),
+                               next_request.compile(),
+                               first_result=False)
 
     if not query_result.has_cursor():
       del self._query_cursors[next_request.cursor().cursor()]

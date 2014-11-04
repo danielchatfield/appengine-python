@@ -47,6 +47,7 @@ class ModuleConfigurationStub(object):
   def __init__(self, application, module_name, version, manual_scaling):
     self.application_root = '/'
     self.application = application
+    self.application_external_name = 'app'
     self.module_name = module_name
     self.major_version = version
     self.version_id = '%s:%s.%s' % (module_name, version, '12345')

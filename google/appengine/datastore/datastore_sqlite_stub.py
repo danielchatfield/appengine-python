@@ -39,6 +39,7 @@ when it begins and releases it when it commits or rolls back.
 
 
 
+
 import array
 import itertools
 import logging

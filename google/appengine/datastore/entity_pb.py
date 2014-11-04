@@ -3556,13 +3556,14 @@ class CompositeIndex(ProtocolBuffer.ProtocolMessage):
 class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
   has_index_id_ = 0
   index_id_ = 0
+  has_write_division_family_ = 0
+  write_division_family_ = ""
   has_fingerprint_1999_ = 0
   fingerprint_1999_ = 0
   has_fingerprint_2011_ = 0
   fingerprint_2011_ = 0
 
   def __init__(self, contents=None):
-    self.division_family_ = []
     if contents is not None: self.MergeFromString(contents)
 
   def index_id(self): return self.index_id_
@@ -3578,20 +3579,18 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
 
   def has_index_id(self): return self.has_index_id_
 
-  def division_family_size(self): return len(self.division_family_)
-  def division_family_list(self): return self.division_family_
+  def write_division_family(self): return self.write_division_family_
 
-  def division_family(self, i):
-    return self.division_family_[i]
+  def set_write_division_family(self, x):
+    self.has_write_division_family_ = 1
+    self.write_division_family_ = x
 
-  def set_division_family(self, i, x):
-    self.division_family_[i] = x
+  def clear_write_division_family(self):
+    if self.has_write_division_family_:
+      self.has_write_division_family_ = 0
+      self.write_division_family_ = ""
 
-  def add_division_family(self, x):
-    self.division_family_.append(x)
-
-  def clear_division_family(self):
-    self.division_family_ = []
+  def has_write_division_family(self): return self.has_write_division_family_
 
   def fingerprint_1999(self): return self.fingerprint_1999_
 
@@ -3623,7 +3622,7 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
   def MergeFrom(self, x):
     assert x is not self
     if (x.has_index_id()): self.set_index_id(x.index_id())
-    for i in xrange(x.division_family_size()): self.add_division_family(x.division_family(i))
+    if (x.has_write_division_family()): self.set_write_division_family(x.write_division_family())
     if (x.has_fingerprint_1999()): self.set_fingerprint_1999(x.fingerprint_1999())
     if (x.has_fingerprint_2011()): self.set_fingerprint_2011(x.fingerprint_2011())
 
@@ -3631,9 +3630,8 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
     if x is self: return 1
     if self.has_index_id_ != x.has_index_id_: return 0
     if self.has_index_id_ and self.index_id_ != x.index_id_: return 0
-    if len(self.division_family_) != len(x.division_family_): return 0
-    for e1, e2 in zip(self.division_family_, x.division_family_):
-      if e1 != e2: return 0
+    if self.has_write_division_family_ != x.has_write_division_family_: return 0
+    if self.has_write_division_family_ and self.write_division_family_ != x.write_division_family_: return 0
     if self.has_fingerprint_1999_ != x.has_fingerprint_1999_: return 0
     if self.has_fingerprint_1999_ and self.fingerprint_1999_ != x.fingerprint_1999_: return 0
     if self.has_fingerprint_2011_ != x.has_fingerprint_2011_: return 0
@@ -3646,40 +3644,43 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
       initialized = 0
       if debug_strs is not None:
         debug_strs.append('Required field: index_id not set.')
+    if (not self.has_write_division_family_):
+      initialized = 0
+      if debug_strs is not None:
+        debug_strs.append('Required field: write_division_family not set.')
     return initialized
 
   def ByteSize(self):
     n = 0
     n += self.lengthVarInt64(self.index_id_)
-    n += 1 * len(self.division_family_)
-    for i in xrange(len(self.division_family_)): n += self.lengthString(len(self.division_family_[i]))
+    n += self.lengthString(len(self.write_division_family_))
     if (self.has_fingerprint_1999_): n += 9
     if (self.has_fingerprint_2011_): n += 9
-    return n + 1
+    return n + 2
 
   def ByteSizePartial(self):
     n = 0
     if (self.has_index_id_):
       n += 1
       n += self.lengthVarInt64(self.index_id_)
-    n += 1 * len(self.division_family_)
-    for i in xrange(len(self.division_family_)): n += self.lengthString(len(self.division_family_[i]))
+    if (self.has_write_division_family_):
+      n += 1
+      n += self.lengthString(len(self.write_division_family_))
     if (self.has_fingerprint_1999_): n += 9
     if (self.has_fingerprint_2011_): n += 9
     return n
 
   def Clear(self):
     self.clear_index_id()
-    self.clear_division_family()
+    self.clear_write_division_family()
     self.clear_fingerprint_1999()
     self.clear_fingerprint_2011()
 
   def OutputUnchecked(self, out):
     out.putVarInt32(8)
     out.putVarInt64(self.index_id_)
-    for i in xrange(len(self.division_family_)):
-      out.putVarInt32(18)
-      out.putPrefixedString(self.division_family_[i])
+    out.putVarInt32(18)
+    out.putPrefixedString(self.write_division_family_)
     if (self.has_fingerprint_1999_):
       out.putVarInt32(25)
       out.put64(self.fingerprint_1999_)
@@ -3691,9 +3692,9 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
     if (self.has_index_id_):
       out.putVarInt32(8)
       out.putVarInt64(self.index_id_)
-    for i in xrange(len(self.division_family_)):
+    if (self.has_write_division_family_):
       out.putVarInt32(18)
-      out.putPrefixedString(self.division_family_[i])
+      out.putPrefixedString(self.write_division_family_)
     if (self.has_fingerprint_1999_):
       out.putVarInt32(25)
       out.put64(self.fingerprint_1999_)
@@ -3708,7 +3709,7 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
         self.set_index_id(d.getVarInt64())
         continue
       if tt == 18:
-        self.add_division_family(d.getPrefixedString())
+        self.set_write_division_family(d.getPrefixedString())
         continue
       if tt == 25:
         self.set_fingerprint_1999(d.get64())
@@ -3725,12 +3726,7 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
   def __str__(self, prefix="", printElemNumber=0):
     res=""
     if self.has_index_id_: res+=prefix+("index_id: %s\n" % self.DebugFormatInt64(self.index_id_))
-    cnt=0
-    for e in self.division_family_:
-      elm=""
-      if printElemNumber: elm="(%d)" % cnt
-      res+=prefix+("division_family%s: %s\n" % (elm, self.DebugFormatString(e)))
-      cnt+=1
+    if self.has_write_division_family_: res+=prefix+("write_division_family: %s\n" % self.DebugFormatString(self.write_division_family_))
     if self.has_fingerprint_1999_: res+=prefix+("fingerprint_1999: %s\n" % self.DebugFormatFixed64(self.fingerprint_1999_))
     if self.has_fingerprint_2011_: res+=prefix+("fingerprint_2011: %s\n" % self.DebugFormatFixed64(self.fingerprint_2011_))
     return res
@@ -3740,14 +3736,14 @@ class SearchIndexEntry(ProtocolBuffer.ProtocolMessage):
     return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
 
   kindex_id = 1
-  kdivision_family = 2
+  kwrite_division_family = 2
   kfingerprint_1999 = 3
   kfingerprint_2011 = 4
 
   _TEXT = _BuildTagLookupTable({
     0: "ErrorCode",
     1: "index_id",
-    2: "division_family",
+    2: "write_division_family",
     3: "fingerprint_1999",
     4: "fingerprint_2011",
   }, 4)

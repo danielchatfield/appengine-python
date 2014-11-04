@@ -44,6 +44,7 @@ directly instead of this class.
 """
 
 
+
 import sys
 
 from google.net.proto2.python.public import descriptor

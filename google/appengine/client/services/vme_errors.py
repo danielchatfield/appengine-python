@@ -186,10 +186,6 @@ class ReplicaPoolTimeoutError(TransientError):
   """Thrown if there was a timeout with a ReplicaPool operation."""
 
 
-class MigrateDuplicateZoneError(PermanentAppError):
-  """Thrown if attempted to migrating a replica pool to its existing zone."""
-
-
 class ReplicaPoolTransientError(TransientError):
   """Thrown if there was an 5xx HttpError from the ReplicaPool service."""
 

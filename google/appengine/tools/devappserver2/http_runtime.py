@@ -34,6 +34,7 @@ TODO: convert all runtimes to START_PROCESS_FILE.
 """
 
 
+
 import base64
 import logging
 import os
@@ -115,6 +116,9 @@ class HttpRuntimeProxy(instance.RuntimeProxy):
 
   # TODO: Determine if we can always use SIGTERM.
   # Set this to True to quit with SIGTERM rather than SIGKILL
+
+
+
 
   _quit_with_sigterm = False
 

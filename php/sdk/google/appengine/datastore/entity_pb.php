@@ -3457,7 +3457,6 @@ namespace storage_onestore_v3 {
 }
 namespace storage_onestore_v3 {
   class SearchIndexEntry extends \google\net\ProtocolMessage {
-    private $division_family = array();
     public function getIndexId() {
       if (!isset($this->index_id)) {
         return "0";
@@ -3479,25 +3478,22 @@ namespace storage_onestore_v3 {
     public function hasIndexId() {
       return isset($this->index_id);
     }
-    public function getDivisionFamilySize() {
-      return sizeof($this->division_family);
+    public function getWriteDivisionFamily() {
+      if (!isset($this->write_division_family)) {
+        return '';
+      }
+      return $this->write_division_family;
     }
-    public function getDivisionFamilyList() {
-      return $this->division_family;
-    }
-    public function getDivisionFamily($idx) {
-      return $this->division_family[$idx];
-    }
-    public function setDivisionFamily($idx, $val) {
-      $this->division_family[$idx] = $val;
+    public function setWriteDivisionFamily($val) {
+      $this->write_division_family = $val;
       return $this;
     }
-    public function addDivisionFamily($val) {
-      $this->division_family[] = $val;
+    public function clearWriteDivisionFamily() {
+      unset($this->write_division_family);
       return $this;
     }
-    public function clearDivisionFamily() {
-      $this->division_family = array();
+    public function hasWriteDivisionFamily() {
+      return isset($this->write_division_family);
     }
     public function getFingerprint1999() {
       if (!isset($this->fingerprint_1999)) {
@@ -3543,7 +3539,7 @@ namespace storage_onestore_v3 {
     }
     public function clear() {
       $this->clearIndexId();
-      $this->clearDivisionFamily();
+      $this->clearWriteDivisionFamily();
       $this->clearFingerprint1999();
       $this->clearFingerprint2011();
     }
@@ -3553,10 +3549,9 @@ namespace storage_onestore_v3 {
         $res += 1;
         $res += $this->lengthVarInt64($this->index_id);
       }
-      $this->checkProtoArray($this->division_family);
-      $res += 1 * sizeof($this->division_family);
-      foreach ($this->division_family as $value) {
-        $res += $this->lengthString(strlen($value));
+      if (isset($this->write_division_family)) {
+        $res += 1;
+        $res += $this->lengthString(strlen($this->write_division_family));
       }
       if (isset($this->fingerprint_1999)) {
         $res += 9;
@@ -3571,10 +3566,9 @@ namespace storage_onestore_v3 {
         $out->putVarInt32(8);
         $out->putVarInt64($this->index_id);
       }
-      $this->checkProtoArray($this->division_family);
-      foreach ($this->division_family as $value) {
+      if (isset($this->write_division_family)) {
         $out->putVarInt32(18);
-        $out->putPrefixedString($value);
+        $out->putPrefixedString($this->write_division_family);
       }
       if (isset($this->fingerprint_1999)) {
         $out->putVarInt32(25);
@@ -3594,7 +3588,7 @@ namespace storage_onestore_v3 {
             break;
           case 18:
             $length = $d->getVarInt32();
-            $this->addDivisionFamily(substr($d->buffer(), $d->pos(), $length));
+            $this->setWriteDivisionFamily(substr($d->buffer(), $d->pos(), $length));
             $d->skip($length);
             break;
           case 25:
@@ -3613,6 +3607,7 @@ namespace storage_onestore_v3 {
     }
     public function checkInitialized() {
       if (!isset($this->index_id)) return 'index_id';
+      if (!isset($this->write_division_family)) return 'write_division_family';
       return null;
     }
     public function mergeFrom($x) {
@@ -3620,8 +3615,8 @@ namespace storage_onestore_v3 {
       if ($x->hasIndexId()) {
         $this->setIndexId($x->getIndexId());
       }
-      foreach ($x->getDivisionFamilyList() as $v) {
-        $this->addDivisionFamily($v);
+      if ($x->hasWriteDivisionFamily()) {
+        $this->setWriteDivisionFamily($x->getWriteDivisionFamily());
       }
       if ($x->hasFingerprint1999()) {
         $this->setFingerprint1999($x->getFingerprint1999());
@@ -3634,10 +3629,8 @@ namespace storage_onestore_v3 {
       if ($x === $this) { return true; }
       if (isset($this->index_id) !== isset($x->index_id)) return false;
       if (isset($this->index_id) && !$this->integerEquals($this->index_id, $x->index_id)) return false;
-      if (sizeof($this->division_family) !== sizeof($x->division_family)) return false;
-      foreach (array_map(null, $this->division_family, $x->division_family) as $v) {
-        if ($v[0] !== $v[1]) return false;
-      }
+      if (isset($this->write_division_family) !== isset($x->write_division_family)) return false;
+      if (isset($this->write_division_family) && $this->write_division_family !== $x->write_division_family) return false;
       if (isset($this->fingerprint_1999) !== isset($x->fingerprint_1999)) return false;
       if (isset($this->fingerprint_1999) && !$this->integerEquals($this->fingerprint_1999, $x->fingerprint_1999)) return false;
       if (isset($this->fingerprint_2011) !== isset($x->fingerprint_2011)) return false;
@@ -3649,8 +3642,8 @@ namespace storage_onestore_v3 {
       if (isset($this->index_id)) {
         $res .= $prefix . "index_id: " . $this->debugFormatInt64($this->index_id) . "\n";
       }
-      foreach ($this->division_family as $value) {
-        $res .= $prefix . "division_family: " . $this->debugFormatString($value) . "\n";
+      if (isset($this->write_division_family)) {
+        $res .= $prefix . "write_division_family: " . $this->debugFormatString($this->write_division_family) . "\n";
       }
       if (isset($this->fingerprint_1999)) {
         $res .= $prefix . "fingerprint_1999: " . $this->debugFormatFixed64($this->fingerprint_1999) . "\n";

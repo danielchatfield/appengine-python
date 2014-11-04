@@ -17,6 +17,7 @@
 """A sandbox implementation that emulates production App Engine."""
 
 
+
 import __builtin__
 import imp
 import os
@@ -137,6 +138,14 @@ def enable_sandbox(config):
     config: The runtime_config_pb2.Config to use to configure the sandbox.
   """
 
+
+
+
+
+
+
+
+
   devnull = open(os.path.devnull)
   modules = [os, traceback, google]
   c_module = _find_shared_object_c_module()
@@ -227,6 +236,9 @@ def _should_keep_module(name):
   return (name in ('__builtin__', 'sys', 'codecs', 'encodings', 'site',
                    'google') or
           name.startswith('google.') or name.startswith('encodings.') or
+
+
+
 
           # Making mysql available is a hack to make the CloudSQL functionality
           # work.

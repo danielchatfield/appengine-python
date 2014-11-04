@@ -39,7 +39,8 @@ class DartVMRuntimeProxy(instance.RuntimeProxy):
   """
 
   def __init__(self, docker_client, runtime_config_getter,
-               module_configuration, default_port=8080, port_bindings=None):
+               module_configuration,
+               default_port=8080, port_bindings=None):
     """Initializer for VMRuntimeProxy.
 
     Args:
@@ -146,9 +147,9 @@ class DartVMRuntimeProxy(instance.RuntimeProxy):
           # Run 'pub build' to generate assets from web/ directory if necessary.
           web_dir = os.path.join(application_dir, 'web')
           if os.path.exists(web_dir):
-            subprocess.check_call([self._pub, 'build', '--mode=debug',
-                                   'web', '-o', dst_build_dir],
-                                  cwd=application_dir)
+            subprocess.check_call(' '.join([self._pub, 'build', '--mode=debug',
+                                            'web', '-o', dst_build_dir]),
+                                  cwd=application_dir, shell=True)
 
         self._vm_runtime_proxy.start(dockerfile_dir=dst_application_dir)
 

@@ -17,6 +17,7 @@
 """A PHP devappserver2 runtime."""
 
 
+
 import base64
 import cStringIO
 import httplib
@@ -39,7 +40,18 @@ from google.appengine.tools.devappserver2 import safe_subprocess
 from google.appengine.tools.devappserver2 import wsgi_server
 
 SDK_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'php/sdk'))
+
+
+
+
+
+
+
+os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'php/sdk'))
+
+
+
+
 
 
 if not os.path.exists(SDK_PATH):

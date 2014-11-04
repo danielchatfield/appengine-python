@@ -291,7 +291,8 @@ class HttpRpcServerOAuth2(HttpRpcServerHttpLib2):
     """Class encapsulating parameters related to OAuth2 authentication."""
 
     def __init__(self, access_token, client_id, client_secret, scope,
-                 refresh_token, credential_file, token_uri=None):
+                 refresh_token, credential_file, token_uri=None,
+                 credentials=None):
       self.access_token = access_token
       self.client_id = client_id
       self.client_secret = client_secret
@@ -299,6 +300,7 @@ class HttpRpcServerOAuth2(HttpRpcServerHttpLib2):
       self.refresh_token = refresh_token
       self.credential_file = credential_file
       self.token_uri = token_uri
+      self.credentials = credentials
 
   def __init__(self, host, oauth2_parameters, user_agent, source,
                host_override=None, extra_headers=None, save_cookies=False,
@@ -344,8 +346,10 @@ class HttpRpcServerOAuth2(HttpRpcServerHttpLib2):
     else:
       self.storage = NoStorage()
 
-    if any((oauth2_parameters.access_token, oauth2_parameters.refresh_token,
-            oauth2_parameters.token_uri)):
+    if oauth2_parameters.credentials:
+      self.credentials = oauth2_parameters.credentials
+    elif any((oauth2_parameters.access_token, oauth2_parameters.refresh_token,
+              oauth2_parameters.token_uri)):
       token_uri = (oauth2_parameters.token_uri or
                    ('https://%s/o/oauth2/token' %
                     os.getenv('APPENGINE_AUTH_SERVER', 'accounts.google.com')))

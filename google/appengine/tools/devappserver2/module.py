@@ -17,6 +17,7 @@
 """Manage the lifecycle of runtime processes and dispatch requests to them."""
 
 
+
 import collections
 import cStringIO
 import functools
@@ -108,6 +109,13 @@ The document has moved'
 <A HREF="%(correct-url)s">here</A>.
 </BODY></HTML>'''
 
+_TIMEOUT_HTML = '<HTML><BODY>503 - This request has timed out.</BODY></HTML>'
+
+# Factor applied to the request timeouts to compensate for the
+# long vmengines reloads. TODO eventually remove that once we have
+# optimized the vm_engine reload.
+_VMENGINE_SLOWDOWN_FACTOR = 2
+
 
 def _static_files_regex_from_handlers(handlers):
   patterns = []
@@ -171,6 +179,18 @@ class Module(object):
         'java': java_runtime.JavaRuntimeInstanceFactory,
         'java7': java_runtime.JavaRuntimeInstanceFactory,
     })
+
+  _MAX_REQUEST_WAIT_TIME = 10
+
+  def _get_wait_time(self):
+    """Gets the wait time before timing out a request.
+
+    Returns:
+      The timeout value in seconds.
+    """
+    if self.vm_enabled():
+      return self._MAX_REQUEST_WAIT_TIME * _VMENGINE_SLOWDOWN_FACTOR
+    return self._MAX_REQUEST_WAIT_TIME
 
   def _create_instance_factory(self,
                                module_configuration):
@@ -356,14 +376,15 @@ class Module(object):
     # Always check for config and file changes because checking also clears
     # pending changes.
     config_changes = self._module_configuration.check_for_updates()
-    has_file_changes = self._watcher.has_changes()
-
+    file_changes = self._watcher.changes()
     if application_configuration.HANDLERS_CHANGED in config_changes:
       handlers = self._create_url_handlers()
       with self._handler_lock:
         self._handlers = handlers
 
-    if has_file_changes:
+    if file_changes:
+      logging.info(
+          'Detected file changes:\n  %s', '\n  '.join(sorted(file_changes)))
       self._instance_factory.files_changed()
 
     if config_changes & _RESTART_INSTANCES_CONFIG_CHANGES:
@@ -371,7 +392,7 @@ class Module(object):
 
     self._maybe_restart_instances(
         config_changed=bool(config_changes & _RESTART_INSTANCES_CONFIG_CHANGES),
-        file_changed=has_file_changes)
+        file_changed=bool(file_changes))
 
   def __init__(self,
                module_configuration,
@@ -443,6 +464,8 @@ class Module(object):
     """
     self._module_configuration = module_configuration
     self._name = module_configuration.module_name
+    self._version = module_configuration.major_version
+    self._app_name_external = module_configuration.application_external_name
     self._host = host
     self._api_host = api_host
     self._api_port = api_port
@@ -464,8 +487,7 @@ class Module(object):
     self._default_version_port = default_version_port
     self._port_registry = port_registry
 
-    # TODO: remove when GA.
-    if self._vm_config and self._vm_config.HasField('docker_daemon_url'):
+    if self.vm_enabled():
       self._RUNTIME_INSTANCE_FACTORIES['vm'] = (
           vm_runtime_factory.VMRuntimeInstanceFactory)
 
@@ -484,6 +506,10 @@ class Module(object):
         (self._host, self._balanced_port), self)
     self._quit_event = threading.Event()  # Set when quit() has been called.
 
+  def vm_enabled(self):
+    # TODO: change when GA
+    return self._vm_config
+
   @property
   def name(self):
     """The name of the module, as defined in app.yaml.
@@ -492,6 +518,24 @@ class Module(object):
     module configuration changes.
     """
     return self._name
+
+  @property
+  def version(self):
+    """The version of the module, as defined in app.yaml.
+
+    This value will be constant for the lifetime of the module even in the
+    module configuration changes.
+    """
+    return self._version
+
+  @property
+  def app_name_external(self):
+    """The external application name of the module, as defined in app.yaml.
+
+    This value will be constant for the lifetime of the module even in the
+    module configuration changes.
+    """
+    return self._app_name_external
 
   @property
   def ready(self):
@@ -570,7 +614,13 @@ class Module(object):
     start_response('404 Not Found', [('Content-Type', 'text/plain')])
     return ['The url "%s" does not match any handlers.' % environ['PATH_INFO']]
 
-  def _error_response(self, environ, start_response, status):
+  def _error_response(self, environ, start_response, status, body=None):
+    if body:
+      start_response(
+          '%d %s' % (status, httplib.responses[status]),
+          [('Content-Type', 'text/html'),
+           ('Content-Length', str(len(body)))])
+      return body
     start_response('%d %s' % (status, httplib.responses[status]), [])
     return []
 
@@ -678,6 +728,12 @@ class Module(object):
         # unavailable if the connection is closed before the client can send
         # all the data. To match the behavior of production, for large files
         # < 64M read the data to prevent the client bug from being triggered.
+
+
+
+
+
+
 
         if content_length <= _MAX_UPLOAD_NO_TRIGGER_BAD_CLIENT_BYTES:
           environ['wsgi.input'].read(content_length)
@@ -1098,7 +1154,6 @@ class AutoScalingModule(Module):
                                             allow_skipped_files,
                                             threadsafe_override)
 
-
     self._process_automatic_scaling(
         self._module_configuration.automatic_scaling)
 
@@ -1435,7 +1490,6 @@ class ManualScalingModule(Module):
   """A pool of instances that is manually-scaled."""
 
   _DEFAULT_MANUAL_SCALING = appinfo.ManualScaling(instances='1')
-  _MAX_REQUEST_WAIT_TIME = 10
 
   @classmethod
   def _populate_default_manual_scaling(cls, manual_scaling):
@@ -1473,7 +1527,6 @@ class ManualScalingModule(Module):
                automatic_restarts,
                allow_skipped_files,
                threadsafe_override):
-
     """Initializer for ManualScalingModule.
 
     Args:
@@ -1542,7 +1595,6 @@ class ManualScalingModule(Module):
                                               automatic_restarts,
                                               allow_skipped_files,
                                               threadsafe_override)
-
 
     self._process_manual_scaling(module_configuration.manual_scaling)
 
@@ -1638,7 +1690,7 @@ class ManualScalingModule(Module):
       An iterable over strings containing the body of the HTTP response.
     """
     start_time = time.time()
-    timeout_time = start_time + self._MAX_REQUEST_WAIT_TIME
+    timeout_time = start_time + self._get_wait_time()
     try:
       while time.time() < timeout_time:
         logging.debug('Dispatching request to %s after %0.4fs pending',
@@ -1696,7 +1748,8 @@ class ManualScalingModule(Module):
           request_type)
 
     start_time = time.time()
-    timeout_time = start_time + self._MAX_REQUEST_WAIT_TIME
+    timeout_time = start_time + self._get_wait_time()
+
     while time.time() < timeout_time:
       if ((request_type in (instance.NORMAL_REQUEST, instance.READY_REQUEST) and
            self._suspended) or self._quit_event.is_set()):
@@ -1714,7 +1767,7 @@ class ManualScalingModule(Module):
           with self._condition:
             self._condition.notify()
     else:
-      return self._error_response(environ, start_response, 503)
+      return self._error_response(environ, start_response, 503, _TIMEOUT_HTML)
 
   def _add_instance(self):
     """Creates and adds a new instance.Instance to the Module.
@@ -1809,20 +1862,21 @@ class ManualScalingModule(Module):
     # Always check for config and file changes because checking also clears
     # pending changes.
     config_changes = self._module_configuration.check_for_updates()
-    has_file_changes = self._watcher.has_changes()
-
+    file_changes = self._watcher.changes()
     if application_configuration.HANDLERS_CHANGED in config_changes:
       handlers = self._create_url_handlers()
       with self._handler_lock:
         self._handlers = handlers
 
-    if has_file_changes:
+    if file_changes:
+      logging.info(
+          'Detected file changes:\n  %s', '\n  '.join(sorted(file_changes)))
       self._instance_factory.files_changed()
 
     if config_changes & _RESTART_INSTANCES_CONFIG_CHANGES:
       self._instance_factory.configuration_changed(config_changes)
 
-    if config_changes & _RESTART_INSTANCES_CONFIG_CHANGES or has_file_changes:
+    if config_changes & _RESTART_INSTANCES_CONFIG_CHANGES or file_changes:
       with self._instances_change_lock:
         if not self._suspended:
           self.restart()
@@ -1997,7 +2051,6 @@ class BasicScalingModule(Module):
 
   _DEFAULT_BASIC_SCALING = appinfo.BasicScaling(max_instances='1',
                                                 idle_timeout='15m')
-  _MAX_REQUEST_WAIT_TIME = 10
 
   @staticmethod
   def _parse_idle_timeout(timing):
@@ -2056,7 +2109,6 @@ class BasicScalingModule(Module):
                automatic_restarts,
                allow_skipped_files,
                threadsafe_override):
-
     """Initializer for BasicScalingModule.
 
     Args:
@@ -2221,7 +2273,7 @@ class BasicScalingModule(Module):
     """
     instance_id = inst.instance_id
     start_time = time.time()
-    timeout_time = start_time + self._MAX_REQUEST_WAIT_TIME
+    timeout_time = start_time + self._get_wait_time()
     try:
       while time.time() < timeout_time:
         logging.debug('Dispatching request to %s after %0.4fs pending',
@@ -2287,7 +2339,7 @@ class BasicScalingModule(Module):
           request_type)
 
     start_time = time.time()
-    timeout_time = start_time + self._MAX_REQUEST_WAIT_TIME
+    timeout_time = start_time + self._get_wait_time()
     while time.time() < timeout_time:
       if self._quit_event.is_set():
         return self._error_response(environ, start_response, 404)
@@ -2304,7 +2356,7 @@ class BasicScalingModule(Module):
           with self._condition:
             self._condition.notify()
     else:
-      return self._error_response(environ, start_response, 503)
+      return self._error_response(environ, start_response, 503, _TIMEOUT_HTML)
 
   def _start_any_instance(self):
     """Choose an inactive instance and start it asynchronously.
@@ -2373,20 +2425,20 @@ class BasicScalingModule(Module):
     # Always check for config and file changes because checking also clears
     # pending changes.
     config_changes = self._module_configuration.check_for_updates()
-    has_file_changes = self._watcher.has_changes()
+    file_changes = self._watcher.changes()
 
     if application_configuration.HANDLERS_CHANGED in config_changes:
       handlers = self._create_url_handlers()
       with self._handler_lock:
         self._handlers = handlers
 
-    if has_file_changes:
+    if file_changes:
       self._instance_factory.files_changed()
 
     if config_changes & _RESTART_INSTANCES_CONFIG_CHANGES:
       self._instance_factory.configuration_changed(config_changes)
 
-    if config_changes & _RESTART_INSTANCES_CONFIG_CHANGES or has_file_changes:
+    if config_changes & _RESTART_INSTANCES_CONFIG_CHANGES or file_changes:
       self.restart()
 
   def _loop_watching_for_changes_and_idle_instances(self):
@@ -2603,7 +2655,7 @@ class InteractiveCommandModule(Module):
     assert request_type == instance.INTERACTIVE_REQUEST
 
     start_time = time.time()
-    timeout_time = start_time + self._MAX_REQUEST_WAIT_TIME
+    timeout_time = start_time + self._get_wait_time()
 
     while time.time() < timeout_time:
       new_instance = False

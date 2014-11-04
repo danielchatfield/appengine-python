@@ -17,8 +17,10 @@
 """Tests for google.apphosting.tools.devappserver2.application_configuration."""
 
 
+
 import collections
 from contextlib import contextmanager
+import datetime
 import io
 import os.path
 import shutil
@@ -170,6 +172,29 @@ class TestModuleConfiguration(unittest.TestCase):
     self.assertEqual(manual_scaling, config.manual_scaling)
     self.assertEqual({'/appdir/app.yaml': 10}, config._mtimes)
     self.assertEqual(info.vm_health_check, config.vm_health_check)
+
+  def test_vm_no_version(self):
+    manual_scaling = appinfo.ManualScaling()
+    info = appinfo.AppInfoExternal(
+        application='app',
+        module='module1',
+        runtime='vm',
+        threadsafe=False,
+        manual_scaling=manual_scaling,
+    )
+
+    appinfo_includes.ParseAndReturnIncludePaths(mox.IgnoreArg()).AndReturn(
+        (info, []))
+    os.path.getmtime('/appdir/app.yaml').AndReturn(10)
+
+    self.mox.StubOutWithMock(application_configuration, 'generate_version_id')
+    application_configuration.generate_version_id().AndReturn(
+        'generated-version')
+    self.mox.ReplayAll()
+    config = application_configuration.ModuleConfiguration('/appdir/app.yaml')
+
+    self.mox.VerifyAll()
+    self.assertEqual(config.major_version, 'generated-version')
 
   def test_set_health_check_defaults(self):
     # Pass nothing in.
@@ -1146,6 +1171,16 @@ class TestApplicationConfiguration(unittest.TestCase):
     self.assertSequenceEqual(
         [module1_config, module2_config], config.modules)
     self.assertEqual(dispatch_config, config.dispatch)
+
+
+class GenerateVersionIdTest(unittest.TestCase):
+  """Tests the GenerateVersionId function."""
+
+  def test_generate_version_id(self):
+    datetime_getter = lambda: datetime.datetime(2014, 9, 18, 17, 31, 45, 92949)
+    generated_version = application_configuration.generate_version_id(
+        datetime_getter)
+    self.assertEqual(generated_version, '20140918t173145')
 
 
 if __name__ == '__main__':

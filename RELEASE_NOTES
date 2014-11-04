@@ -3,8 +3,52 @@ All rights reserved.
 
 App Engine SDK - Release Notes
 
-Version 1.9.13
+Version 1.9.15
 
+All
+==============================
+- Fixed an issue with Datastore stats not displaying entity counts.
+    https://code.google.com/p/googleappengine/issues/detail?id=9328
+
+Python
+==============================
+- search.GetResponse in the Search API now supports __len__.
+    https://code.google.com/p/googleappengine/issues/detail?id=10340
+- The get_access_token() method of the App Identity API now caches access
+  tokens within the instance.
+- Fixed an issue with Cloud Endpoints where multi-class Python APIs
+  that reused method names could result in incorrect API descriptors.
+    https://code.google.com/p/googleappengine/issues/detail?id=10595
+    https://code.google.com/p/googleappengine/issues/detail?id=11366
+    https://code.google.com/p/googleappengine/issues/detail?id=11373
+
+PHP
+==============================
+- Temporary uploaded files are now unlinked (deleted) if not moved. Empty
+  files not written to a temporary directory are removed.
+    http://stackoverflow.com/questions/21571418/google-app-engine-empty-form
+    -upload-field-submission-issue
+- Fixed an issue with get_define_constraints not returning a Core array.
+    https://code.google.com/p/googleappengine/issues/detail?id=11236
+
+Version 1.9.14
+
+All
+==============================
+- The URL Fetch service will always issue a GET request when it receives
+  and responds to a 302 response; previously it would preserve the original
+  HTTP method. This new behavior is in line with modern conventions (see
+  http://tools.ietf.org/html/rfc7231#section-6.4).  You can
+  use the final_url field of the Response object (or a similar object in other
+  APIs, see
+  https://cloud.google.com/appengine/docs/python/urlfetch/responseobjects)
+  to determine if your fetches are being redirected. If this change affects
+  your application, please contact our support team - even if you do not have
+  a support contract at
+  https://support.google.com/cloud/answer/3420056?hl=en&ref_topic=3473162.
+
+Version 1.9.13
+==============================
 - No changes for 1.9.13
 
 

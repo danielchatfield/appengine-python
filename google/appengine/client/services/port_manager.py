@@ -51,8 +51,8 @@ def CreatePortManager(forwarded_ports, container_port):
   """Construct a PortManager object with port forwarding configured.
 
   Args:
-    forwarded_ports: A dictionary containing desired mappings from VM host port
-        to docker container port.
+    forwarded_ports: A string containing desired mappings from VM host ports
+        to docker container ports.
     container_port: An integer port number for the container port.
 
   Returns:
